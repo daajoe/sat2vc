@@ -1,0 +1,85 @@
+#!/usr/bin/env python2
+#
+# Copyright 2019
+# M. Ayaz Dzulfikar, University of Indonesia, Indonesia
+# Johannes K. Fichte, TU Dresden, Germany
+# Markus Hecher, TU Wien, Austria
+#
+# sat2vc is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation, either version 3 of
+# the License, or (at your option) any later version.
+# sat2vc is distributed in the hope that it will be
+# useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+# of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.  You should have received a
+# copy of the GNU General Public License along with
+# sat2vc.  If not, see <http://www.gnu.org/licenses/>.
+#
+import argparse
+import inspect
+import logging
+import logging.config
+import os
+import sys
+import bz2
+
+# TODO find good workaround
+src_path = os.path.abspath(os.path.realpath(inspect.getfile(inspect.currentframe())))
+src_path = os.path.realpath(os.path.join(src_path, '../../sat2vc'))
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+from sat2vc import threesat, vertexcover
+
+
+def is_valid_file(parser, arg):
+    if not arg:
+        parser.error('Missing file.')
+    if not os.path.exists(arg):
+        parser.error('The file "%s" does not exist!' % arg)
+    return arg
+
+
+def setup_logging(config_file='%s/logging.conf' % (os.path.dirname(__file__))):
+    logging.config.fileConfig(config_file)
+
+
+setup_logging(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'logging.conf'))
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='%(prog)s')
+    required = parser.add_argument_group('required arguments')
+    required.add_argument('-f', '--filename', dest='cnf_filename', action='store', required=True,
+                          type=lambda x: is_valid_file(parser, x),
+                          help='Input cnf file')
+    parser.add_argument('-m', '--mode', dest="parse_mode", action='store', default="pt",
+                        help="pick mode between (pt, lm)")
+    parser.add_argument('-o', '--output', dest='output_filename', action='store',
+                        help='Output file in bz2')
+    args = parser.parse_args()
+    return args
+
+
+def main():
+    args = parse_args()
+    cnf_filename = args.cnf_filename
+    mode = args.parse_mode
+    output_filename = args.output_filename
+
+    t_sat_instance = threesat.ThreeSat.from_sat_file(cnf_filename, mode)
+    if mode not in ["pt", "lm"]:
+        t_sat_instance.write(sys.stdout)
+        return
+
+    vc_instance = vertexcover.VertexCover.from_three_sat(t_sat_instance)
+
+    stream = sys.stdout
+    if output_filename:
+        stream = bz2.open(output_filename, "wt")
+    vc_instance.write(stream)
+
+
+if __name__ == "__main__":
+    main()
